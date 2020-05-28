@@ -5,7 +5,8 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.player.PlayerMoveEvent;
-import java.util.Iterator;
+
+import java.util.ArrayList;
 
 import org.bukkit.plugin.Plugin;
 import org.bukkit.entity.Player;
@@ -16,6 +17,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class LearnSpeedBridge extends JavaPlugin implements Listener
 {
     HashMap<Player, Location> old;
+
+    ArrayList<String> sPlayers = new ArrayList<>();
 
     public LearnSpeedBridge() {
         this.old = new HashMap<Player, Location>();
@@ -34,6 +37,15 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
                 }
             }
         }, 2L, 2L);
+
+        Bukkit.getScheduler().scheduleSyncDelayedTask(this, new Runnable() {
+            @Override
+            public void run() {
+                if (getConfig().getBoolean("onoff") || !(getConfig().getBoolean("onoff"))){
+                    getConfig().set("onoff", null);
+                }
+            }
+        }, 20L);
     }
 
     public void onDisable() {
@@ -48,11 +60,13 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
         }
         e.getPlayer().setFallDistance(0.0f);
         if (e.getTo().getBlockY() < this.old.get(e.getPlayer()).getBlockY() - (fallheight + 1)) {
-            if (getConfig().getBoolean("onoff")) {
-                if (e.getPlayer().hasPermission("speedbridge.use")) {
-                    if (!e.getPlayer().isFlying()) {
-                        if (e.getPlayer().getGameMode() != GameMode.SPECTATOR) {
-                            e.getPlayer().teleport((Location) this.old.get(e.getPlayer()));
+            if (sPlayers.size() != 0){
+                if (sPlayers.contains(e.getPlayer().getName())) {
+                    if (e.getPlayer().hasPermission("speedbridge.use")) {
+                        if (!e.getPlayer().isFlying()) {
+                            if (e.getPlayer().getGameMode() != GameMode.SPECTATOR) {
+                                e.getPlayer().teleport((Location) this.old.get(e.getPlayer()));
+                            }
                         }
                     }
                 }
@@ -60,29 +74,16 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
         }
     }
 
-    public int getInt(String fromString) {
-        String a=fromString.replaceAll("[a-zA-Z]+", "");
-        try {
-            return Integer.parseInt(a);
-        }catch(Exception e) {
-            return 0;
-        }
-    }
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if(command.getName().equals("speedbridge")) {
             if (sender.hasPermission("speedbridge.cmd")) {
                 if (args.length == 0) {
-                    boolean onoff = getConfig().getBoolean("onoff");
-                    if (onoff) {
-                        getConfig().set("onoff", false);
-                        saveConfig();
-                        reloadConfig();
+                    if (sPlayers.contains(sender.getName())) {
+                        sPlayers.remove(sender.getName());
                         sender.sendMessage(ChatColor.DARK_RED + "SpeedBridge has been turned off");
-                    } else {
-                        getConfig().set("onoff", true);
-                        saveConfig();
-                        reloadConfig();
+                    } else if (!(sPlayers.contains(sender.getName()))){
+                        sPlayers.add(sender.getName());
                         sender.sendMessage(ChatColor.DARK_GREEN + "SpeedBridge has been turned on");
                     }
                 }
@@ -123,4 +124,3 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
         return false;
     }
 }
-
