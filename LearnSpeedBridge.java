@@ -155,3 +155,4 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
         return false;
     }
 }
+
