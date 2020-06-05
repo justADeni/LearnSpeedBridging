@@ -1,9 +1,11 @@
 package me.prostedeni.goodcraft.learnspeedbridge;
 
 import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 
 import java.util.ArrayList;
@@ -12,6 +14,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.entity.Player;
 import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -24,6 +27,29 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
 
     public LearnSpeedBridge() {
         this.old = new HashMap<String, Location>();
+    }
+
+    @EventHandler
+    public void onPlayerPlaceBlock(BlockPlaceEvent e){
+        if (getConfig().getBoolean("blockDecay")) {
+            if (sPlayers.contains(e.getPlayer().getName())) {
+                runRemoveTask(e.getBlockPlaced(), e.getPlayer());
+            }
+        }
+    }
+
+    public void runRemoveTask(Block block, Player player){
+        AtomicInteger processId = new AtomicInteger();
+        int taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
+            @Override
+            public void run() {
+                if (player.getLocation().distance(block.getLocation()) > 5) {
+                    block.setType(Material.AIR);
+                    Bukkit.getScheduler().cancelTask(processId.get());
+                }
+            }
+        }, 0L, (getConfig().getInt("blockDecayTimer")*20L));
+        processId.set(taskId);
     }
 
     public void onEnable() {
@@ -118,8 +144,21 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
                         sender.sendMessage(ChatColor.DARK_GREEN + "SpeedBridge has been turned on");
                     }
                 }
+
                 if (args.length == 1) {
-                    if (args[0].equals("reload")) {
+                    if (args[0].equalsIgnoreCase("blockdecay")) {
+                        if (getConfig().getBoolean("blockDecay")) {
+                            getConfig().set("blockDecay", false);
+                            saveConfig();
+                            reloadConfig();
+                            sender.sendMessage(ChatColor.DARK_RED + "blockDecay has been turned off");
+                        } else if (!(getConfig().getBoolean("blockDecay"))){
+                            getConfig().set("blockDecay", true);
+                            saveConfig();
+                            reloadConfig();
+                            sender.sendMessage(ChatColor.DARK_GREEN + "blockDecay has been turned on");
+                        }
+                    } else if (args[0].equals("reload")) {
                         reloadConfig();
                         saveConfig();
                         sender.sendMessage(ChatColor.DARK_GREEN + "Config reloaded");
@@ -145,7 +184,25 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
                         }
                     }
                 }
-                if (args.length > 1) {
+
+                if (args.length == 2) {
+                    if (args[0].equalsIgnoreCase("blockdecay")) {
+                        if (args[1] != null) {
+                            if (Integer.parseInt(args[1]) <= 0){
+                                sender.sendMessage(ChatColor.DARK_RED + "blockDecayTimer cannot be 0 or below");
+                            } else if ((Integer.parseInt(args[1])) > 0 && (Integer.parseInt(args[1]) <= 20)) {
+                                getConfig().set("blockDecayTimer", args[1]);
+                                saveConfig();
+                                reloadConfig();
+                                sender.sendMessage(ChatColor.DARK_GREEN + "blockDecayTimer was set to " + args[1]);
+                            } else if (Integer.parseInt(args[1]) > 20){
+                                sender.sendMessage(ChatColor.DARK_RED + "blockDecayTimer cannot be over 20");
+                            }
+                        }
+                    }
+                }
+
+                if (args.length > 2) {
                     sender.sendMessage(ChatColor.DARK_RED + "Invalid number of arguments");
                 }
             } else {
@@ -155,4 +212,3 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
         return false;
     }
 }
-
