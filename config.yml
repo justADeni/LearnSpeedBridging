@@ -1,1 +1,3 @@
 fallheight: 3
+blockDecay: true
+blockDecayTimer: 5
