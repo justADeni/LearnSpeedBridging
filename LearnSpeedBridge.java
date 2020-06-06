@@ -40,7 +40,7 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
 
     public void runRemoveTask(Block block, Player player){
         AtomicInteger processId = new AtomicInteger();
-        int taskId = Bukkit.getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
+        int taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
             @Override
             public void run() {
                 if (player.getLocation().distance(block.getLocation()) > 5) {
