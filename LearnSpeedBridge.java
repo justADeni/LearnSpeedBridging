@@ -1,5 +1,6 @@
 package me.prostedeni.goodcraft.learnspeedbridge;
 
+import com.google.common.collect.Maps;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
@@ -11,73 +12,109 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import java.util.ArrayList;
 
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.entity.Player;
 import java.util.HashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
 
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.StringUtil;
 
-public class LearnSpeedBridge extends JavaPlugin implements Listener
-{
-    HashMap<String, Location> old;
+import static org.bukkit.ChatColor.DARK_GREEN;
+import static org.bukkit.ChatColor.DARK_RED;
 
-    ArrayList<String> sPlayers = new ArrayList<>();
+public class LearnSpeedBridge extends JavaPlugin implements Listener {
 
-    public LearnSpeedBridge() {
-        this.old = new HashMap<String, Location>();
-    }
+    static boolean blockDecayBoolean;
+    static int blockDecayTimerInt;
+    static int fallheightInt;
 
+    private static HashMap<Player, userdata> data = Maps.newHashMap();
+
+    ArrayList<Location> blocksToRemove = new ArrayList<>();
+
+    //List<Location> prot = Lists.newArray
     @EventHandler
     public void onPlayerPlaceBlock(BlockPlaceEvent e){
-        if (getConfig().getBoolean("blockDecay")) {
-            if (sPlayers.contains(e.getPlayer().getName())) {
-                runRemoveTask(e.getBlockPlaced(), e.getPlayer());
+        if (blockDecayBoolean) {
+            if (data.containsKey(e.getPlayer())) {
+                runRemoveTask(e.getBlockPlaced(), getUser(e.getPlayer()));
             }
         }
     }
 
-    public void runRemoveTask(Block block, Player player){
-        AtomicInteger processId = new AtomicInteger();
-        int taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
-            @Override
-            public void run() {
-                if (player.getLocation().distance(block.getLocation()) > 5) {
-                    block.setType(Material.AIR);
-                    Bukkit.getScheduler().cancelTask(processId.get());
+    private void runRemoveTask(Block block, userdata player){
+
+        player.addBlock(block.getLocation());
+
+        new BukkitRunnable(){
+            public void run(){
+                if(!player.isOnline()){
+                    return;
+                }
+
+                if (player.getOld().distance(block.getLocation()) > 5) {
+
+                    player.remove(block.getLocation());
+                    blocksToRemove.add(block.getLocation());
+                    return;
                 }
             }
-        }, 0L, (getConfig().getInt("blockDecayTimer")*20L));
-        processId.set(taskId);
+        }.runTaskTimerAsynchronously(this, 0, ((blockDecayTimerInt*5)));
+    }
+
+    private static userdata getUser(Player p){
+        if(!data.containsKey(p))data.put(p, new userdata(p));
+        return data.get(p);
     }
 
     public void onEnable() {
         saveDefaultConfig();
-        Bukkit.getPluginManager().registerEvents((Listener)this, (Plugin)this);
-        Bukkit.getScheduler().scheduleAsyncRepeatingTask((Plugin)this, (Runnable)new Runnable() {
-            @Override
-            public void run() {
-                for (final Player p : Bukkit.getOnlinePlayers()) {
-                    if (sPlayers != null){
-                        if (sPlayers.contains(p.getName())){
-                            if (new Location(p.getWorld(), p.getLocation().getX(), p.getLocation().getY() - 1.0, p.getLocation().getZ()).getBlock().getType() != Material.AIR) {
-                                LearnSpeedBridge.this.old.put(p.getName(), new Location(p.getWorld(), p.getLocation().getX(), p.getLocation().getY() + 1.0, p.getLocation().getZ(), p.getLocation().getYaw(), p.getLocation().getPitch()));
-                            }
-                        }
-                    }
+        Bukkit.getPluginManager().registerEvents(this, this);
+        new BukkitRunnable(){
+            public void run(){
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    if (new Location(p.getWorld(), p.getLocation().getX(), p.getLocation().getY() - 1.0, p.getLocation().getZ()).getBlock().getType() != Material.AIR)
+                       if (data.containsKey(p))
+                    getUser(p).setOld(new Location(p.getWorld(), p.getLocation().getX(), p.getLocation().getY() + 1.0, p.getLocation().getZ(), p.getLocation().getYaw(), p.getLocation().getPitch()));
                 }
             }
-        }, 2L, 3L);
-
-        Bukkit.getScheduler().scheduleAsyncDelayedTask(this, new Runnable() {
-            @Override
-            public void run() {
+        }.runTaskTimerAsynchronously(this,0,3);
+        new BukkitRunnable(){
+            public void run(){
                 if (getConfig().getBoolean("onoff") || !(getConfig().getBoolean("onoff"))){
                     getConfig().set("onoff", null);
                 }
             }
-        }, 20L);
+        }.runTaskLaterAsynchronously(this,20);
+
+        fetchConfig();
+
+        if (blockDecayBoolean){
+            new BukkitRunnable(){
+                public void run(){
+                    if (blocksToRemove.size() != 0){
+                        for (Location blockLoc : blocksToRemove){
+                            if (blockLoc.getBlock().getType() != Material.AIR){
+                                blockLoc.getBlock().setType(Material.AIR);
+                            } else if (blockLoc.getBlock().getType() == Material.AIR){
+                                blocksToRemove.remove(blockLoc);
+                            }
+                            if (blocksToRemove.size() == 0){
+                                break;
+                            }
+                        }
+                    }
+                }
+            }.runTaskTimer(this, 0, ((blockDecayTimerInt*10)));
+        }
+    }
+
+    public void fetchConfig(){
+        blockDecayBoolean = getConfig().getBoolean("blockDecay");
+        blockDecayTimerInt = getConfig().getInt("blockDecayTimer");
+        fallheightInt = getConfig().getInt("fallheight");
     }
 
     public void onDisable() {
@@ -86,24 +123,23 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
 
     @EventHandler
     public void onPlayerMove(final PlayerMoveEvent e) {
-        int fallheight = getConfig().getInt("fallheight");
-        if (old.containsKey(e.getPlayer().getName())) {
-            World wold = old.get(e.getPlayer().getName()).getWorld();
-            World nold = e.getPlayer().getWorld();
-            if (wold != nold) {
+        if (getUser(e.getPlayer()).getOld() != null) {
+            if (getUser(e.getPlayer()).getOld().getWorld() != e.getPlayer().getWorld()) {
                 return;
             }
         }
-        e.getPlayer().setFallDistance(0.0f);
-        if (old.containsKey(e.getPlayer().getName())){
-            if (e.getPlayer().getLocation().getBlockY() < old.get(e.getPlayer().getName()).getBlockY() - (fallheight + 1)) {
-                if (sPlayers.size() != 0) {
-                    if (sPlayers.contains(e.getPlayer().getName())) {
-                        if (e.getPlayer().hasPermission("speedbridge.use")) {
-                            if (!e.getPlayer().isFlying()) {
-                                if (e.getPlayer().getGameMode() != GameMode.SPECTATOR) {
-                                    e.getPlayer().teleport((Location) this.old.get(e.getPlayer().getName()));
-                                }
+
+        if (data.containsKey(e.getPlayer())) {
+            e.getPlayer().setFallDistance(0.0f);
+        }
+
+        if (data.containsKey(e.getPlayer())) {
+            if (data.get(e.getPlayer()).getOld() != null) {
+                if (e.getPlayer().getLocation().getBlockY() < data.get(e.getPlayer()).getOld().getBlockY() - (fallheightInt + 1)) {
+                    if (e.getPlayer().hasPermission("speedbridge.use")) {
+                        if (!e.getPlayer().isFlying()) {
+                            if (e.getPlayer().getGameMode() != GameMode.SPECTATOR) {
+                                e.getPlayer().teleport(getUser(e.getPlayer()).getOld());
                             }
                         }
                     }
@@ -113,102 +149,176 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
     }
 
     @EventHandler
-    public void onLeave(PlayerQuitEvent q){
-        if (sPlayers != null) {
-            if (sPlayers.contains(q.getPlayer().getName())) {
-                sPlayers.remove(q.getPlayer().getName());
-            }
-        }
-        if (old != null) {
-            if (old.containsKey(q.getPlayer().getName())) {
-                old.remove(q.getPlayer().getName());
-            }
+    public void leave(PlayerQuitEvent q){
+        if(data.containsKey(q.getPlayer())){
+            for(Location a : data.get(q.getPlayer()).getBlocks())
+                a.getBlock().setType(Material.AIR);
+            data.remove(q.getPlayer());
         }
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) throws NumberFormatException {
         if(command.getName().equals("speedbridge")) {
+            if (sender instanceof Player){
             if (sender.hasPermission("speedbridge.cmd")) {
                 if (args.length == 0) {
-                    if (sPlayers.contains(sender.getName())) {
-                        sPlayers.remove(sender.getName());
-                        sender.sendMessage(ChatColor.DARK_RED + "SpeedBridge has been turned off");
-                        if (old != null) {
-                            if (old.containsKey(sender.getName())) {
-                                old.remove(sender.getName());
-                            }
-                        }
-                    } else if (!(sPlayers.contains(sender.getName()))){
-                        sPlayers.add(sender.getName());
-                        sender.sendMessage(ChatColor.DARK_GREEN + "SpeedBridge has been turned on");
+                    if (data.containsKey(((Player) sender).getPlayer())) {
+                        data.remove(((Player) sender).getPlayer());
+                        msg( "&4SpeedBridge has been turned off", sender);
+                    } else if (!(data.containsKey(sender))){
+                        getUser((Player)sender);
+                        msg( "&2SpeedBridge has been turned on", sender);
                     }
                 }
 
                 if (args.length == 1) {
                     if (args[0].equalsIgnoreCase("blockdecay")) {
-                        if (getConfig().getBoolean("blockDecay")) {
+                        if (blockDecayBoolean) {
                             getConfig().set("blockDecay", false);
                             saveConfig();
                             reloadConfig();
-                            sender.sendMessage(ChatColor.DARK_RED + "blockDecay has been turned off");
-                        } else if (!(getConfig().getBoolean("blockDecay"))){
+                            fetchConfig();
+                            msg("&4blockDecay has been turned off", sender);
+                        } else if (!(blockDecayBoolean)){
                             getConfig().set("blockDecay", true);
                             saveConfig();
                             reloadConfig();
-                            sender.sendMessage(ChatColor.DARK_GREEN + "blockDecay has been turned on");
+                            fetchConfig();
+                            msg( "&2blockDecay has been turned on", sender);
                         }
-                    } else if (args[0].equals("reload")) {
+                    } else if (args[0].equalsIgnoreCase("reload")) {
                         reloadConfig();
                         saveConfig();
-                        sender.sendMessage(ChatColor.DARK_GREEN + "Config reloaded");
+                        fetchConfig();
+                        msg("&2Config reloaded", sender);
                         System.out.println("Config reloaded");
                     } else {
-                        int fallheight = getConfig().getInt("fallheight");
-                        int setFallHeight = Integer.parseInt(args[0]);
-                        if (fallheight == setFallHeight){
-                            sender.sendMessage(ChatColor.DARK_RED + "Fall height already is set to " + fallheight);
-                        } else {
-                            if (setFallHeight < 1) {
-                                sender.sendMessage(ChatColor.DARK_RED + "Fall height cannot be below 1");
+                        try {
+                            int setFallHeight = Integer.parseInt(args[0]);
+                            if (fallheightInt == setFallHeight){
+                                msg("&4Fall height already is set to " + fallheightInt, sender);
+                            } else {
+                                if (setFallHeight < 1) {
+                                    msg( "&4Fall height cannot be below 1",sender);
+                                }
+                                if (setFallHeight >= 1 && setFallHeight <= 20) {
+                                    msg("&2Fall height set to " + setFallHeight, sender);
+                                    getConfig().set("fallheight", setFallHeight);
+                                    saveConfig();
+                                    reloadConfig();
+                                    fetchConfig();
+                                }
+                                if (setFallHeight > 20) {
+                                    msg("&4Fall height cannot be over 20", sender);
+                                }
                             }
-                            if (setFallHeight >= 1 && setFallHeight <= 20) {
-                                sender.sendMessage(ChatColor.DARK_GREEN + "Fall height set to " + setFallHeight);
-                                getConfig().set("fallheight", setFallHeight);
-                                saveConfig();
-                                reloadConfig();
-                            }
-                            if (setFallHeight > 20) {
-                                sender.sendMessage(ChatColor.DARK_RED + "Fall height cannot be over 20");
-                            }
+                        }
+                        catch (java.lang.NumberFormatException e){
+                            msg("&4Invalid arguments", sender);
                         }
                     }
                 }
 
                 if (args.length == 2) {
                     if (args[0].equalsIgnoreCase("blockdecay")) {
-                        if (args[1] != null) {
-                            if (Integer.parseInt(args[1]) <= 0){
-                                sender.sendMessage(ChatColor.DARK_RED + "blockDecayTimer cannot be 0 or below");
-                            } else if ((Integer.parseInt(args[1])) > 0 && (Integer.parseInt(args[1]) <= 20)) {
-                                getConfig().set("blockDecayTimer", args[1]);
-                                saveConfig();
-                                reloadConfig();
-                                sender.sendMessage(ChatColor.DARK_GREEN + "blockDecayTimer was set to " + args[1]);
-                            } else if (Integer.parseInt(args[1]) > 20){
-                                sender.sendMessage(ChatColor.DARK_RED + "blockDecayTimer cannot be over 20");
+                        try {
+                            if (args[1] != null) {
+                                if (Integer.parseInt(args[1]) <= 0) {
+                                    msg("&4blockDecayTimer cannot be 0 or below", sender);
+                                } else if ((Integer.parseInt(args[1])) > 0 && (Integer.parseInt(args[1]) <= 20)) {
+                                    getConfig().set("blockDecayTimer", args[1]);
+                                    saveConfig();
+                                    reloadConfig();
+                                    fetchConfig();
+                                    msg("&2blockDecayTimer was set to "+args[1], sender);
+                                } else if (Integer.parseInt(args[1]) > 20) {
+                                    msg("&4blockDecayTimer cannot be over 20", sender);
+                                }
                             }
+                        }
+                        catch (java.lang.NumberFormatException e){
+                            msg("&4Invalid arguments",sender);
                         }
                     }
                 }
 
                 if (args.length > 2) {
-                    sender.sendMessage(ChatColor.DARK_RED + "Invalid number of arguments");
+                    msg("&4Invalid number of arguments",sender);
                 }
             } else {
-                sender.sendMessage(ChatColor.DARK_RED + "You don't have the required permission");
+                msg("&4You don't have the required permission",sender);
+            }
+        }}
+        return false;
+    }
+
+    public void msg(String text, CommandSender s){
+        if(text!=null && s!=null)
+        s.sendMessage(ChatColor.translateAlternateColorCodes('&',text));
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String commandLabel, String[] args) {
+        if (command.getName().equalsIgnoreCase("speedbridge")) {
+            if (args.length == 1) {
+                if (sender.hasPermission("speedbridge.cmd")) {
+                    final ArrayList<String> l = new ArrayList<>();
+
+                    final ArrayList<String> commands = new ArrayList<>();
+                    commands.add("reload");
+                    commands.add("blockDecay");
+                    commands.add("<fallheight number>");
+
+                    if (args[0].contains("r")) {
+                        final ArrayList<String> r = new ArrayList<>();
+                        r.add("reload");
+                        return r;
+                    } else if (args[0].contains("b")) {
+                        final ArrayList<String> b = new ArrayList<>();
+                        b.add("blockDecay");
+                        return b;
+                    } else {
+                        final ArrayList<String> nums = new ArrayList<>();
+                        for (int i = 1; i > 0 && i <= 20; i++) {
+                            nums.add(String.valueOf(i));
+                        }
+                        if (nums.contains(args[0])) {
+                            final ArrayList<String> d = new ArrayList<>();
+                            d.add("<fallheight number>");
+                            return d;
+                        }
+                    }
+
+                    StringUtil.copyPartialMatches(args[0], commands, l);
+                    return l;
+                }
+            } else if (args.length == 2){
+                if (args[0].equalsIgnoreCase("blockDecay")){
+
+                    if (sender.hasPermission("speedbridge.cmd")) {
+                        final ArrayList<String> l = new ArrayList<>();
+
+                        final ArrayList<String> commands = new ArrayList<>();
+                        commands.add("<blockDecay number>");
+
+                        final ArrayList<String> nums = new ArrayList<>();
+                        for (int i = 1; i > 0 && i <= 20; i++) {
+                            nums.add(String.valueOf(i));
+                        }
+                        if (nums.contains(args[1])) {
+                            final ArrayList<String> d = new ArrayList<>();
+                            d.add("<fallheight number>");
+                            return d;
+                        }
+
+                        StringUtil.copyPartialMatches(args[1], commands, l);
+                        return l;
+
+                    }
+                }
             }
         }
-        return false;
+        return null;
     }
 }
