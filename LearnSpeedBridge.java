@@ -1,6 +1,7 @@
 package me.prostedeni.goodcraft.learnspeedbridge;
 
 import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
@@ -144,7 +145,10 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
             if (wold != nold) {
                 return;
             }
+
             e.getPlayer().setFallDistance(0.0f);
+            //this prevents fall damage of speedbridging player
+
             if (e.getPlayer().getLocation().getBlockY() < old.get(e.getPlayer().getName()).getBlockY() - (fallheightInt + 1)) {
                 if (sPlayers.size() != 0) {
                     if (sPlayers.contains(e.getPlayer().getName())) {
@@ -226,8 +230,22 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
                     }
                 }
             }
+            //this protects block which speedbridging player is standing on
+
+
+            Block b = e.getBlock();
+            Location loc = new Location(b.getWorld(), b.getX(), (b.getY() - 2), b.getZ());
+            if (old.containsValue(loc)) {
+                if (!(old.get(e.getPlayer().getName()).equals(loc))) {
+                    e.setCancelled(true);
+                }
+            }
+            //this protects block which the player will be returned to if he falls
+            //*(probably)
+
         }
-        //this protects block which speedbridging player is standing on
+
+
 
     }
 
@@ -457,7 +475,7 @@ public class LearnSpeedBridge extends JavaPlugin implements Listener
 
                         //thought of much better way to go about this, adding 200 numbers every time
                         //autocomplete happens might've been resource taxing
-                        //did the same thing on lines 418-430
+                        //did the same thing on lines 435-447
 
                         //if there are no issues reported, will remove this comment in next version (assuming there is one)
 
