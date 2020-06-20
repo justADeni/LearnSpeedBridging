@@ -1,0 +1,9 @@
+name: LearnSpeedBridge
+version: ${project.version}
+main: me.prostedeni.goodcraft.learnspeedbridge.LearnSpeedBridge
+api-version: 1.13
+authors: [Straiker123, prosteDeni]
+description: plugin that will let you learn speedbridging, for bedwars and skywars
+commands:
+  speedbridge:
+    description: Will let you switch the plugin on and off
