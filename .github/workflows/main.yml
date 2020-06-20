@@ -19,6 +19,8 @@ jobs:
         java-version: 1.8
     - name: Build with Maven
       run: mvn clean package
+    - name: run command
+      run: rm -rf maven-status maven-archiver classes original-LearnSpeedBridge-1.0.jar
     - uses: actions/upload-artifact@v1
       with:
         name: artifact
